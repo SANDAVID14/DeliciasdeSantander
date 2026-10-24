@@ -11,17 +11,17 @@ app.use(cors());
 app.use(express.json({ limit: '15mb' }));
 app.use(express.static(__dirname));
 
-// Endpoint GET: Obtener datos para los clientes
-app.get('/api/sync.php', (req, res) => {
+// Endpoint GET: Obtener datos para los clientes (acepta /api/sync.php y /api/sync)
+app.get(['/api/sync.php', '/api/sync'], (req, res) => {
   if (fs.existsSync(DATA_FILE)) {
     const data = fs.readFileSync(DATA_FILE, 'utf8');
     return res.json(JSON.parse(data));
   }
-  return res.json({ products: [], banners: [] });
+  return res.json({ products: [], banners: [], orders: [] });
 });
 
-// Endpoint POST: Guardar cambios del administrador en el hosting
-app.post('/api/sync.php', (req, res) => {
+// Endpoint POST: Guardar cambios del administrador en el hosting (acepta /api/sync.php y /api/sync)
+app.post(['/api/sync.php', '/api/sync'], (req, res) => {
   const { token, products, banners, orders } = req.body;
   if (token !== 'Santander2026*') {
     return res.status(403).json({ error: 'Token inválido' });

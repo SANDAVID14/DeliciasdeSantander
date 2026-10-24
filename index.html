@@ -374,11 +374,24 @@
         };
 
         try {
-          const res = await fetch(API_ENDPOINT, {
+          let res = await fetch(API_ENDPOINT, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
           });
+
+          // Si el servidor usa Node o Vercel sin PHP, probar ruta alternativa ./api/sync
+          if (!res.ok && res.status === 404) {
+            try {
+              res = await fetch("./api/sync", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+              });
+            } catch (errFallback) {
+              // Si falla, se maneja en el bloque principal
+            }
+          }
 
           if (res.ok) {
             setSyncStatus("connected");
