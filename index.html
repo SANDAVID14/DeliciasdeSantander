@@ -91,6 +91,8 @@
         dayName: getDayNameFromDate(new Date().toISOString().split("T")[0]),
         timeSlot: "12:00 - 14:00",
         fulfillment: "PICKUP",
+        paymentMethod: "CASH",
+        paymentLabel: "Pago en Entrega / Recogida (Efectivo o Datáfono)",
         customer: {
           name: "María Gómez",
           phone: "+34 612 345 678",
@@ -115,6 +117,8 @@
         dayName: getDayNameFromDate(new Date(Date.now() + 86400000).toISOString().split("T")[0]),
         timeSlot: "14:00 - 16:00",
         fulfillment: "DELIVERY",
+        paymentMethod: "BIZUM",
+        paymentLabel: "Bizum (+34 603 374 784)",
         customer: {
           name: "Carlos Rodríguez",
           phone: "+34 699 876 543",
@@ -147,6 +151,16 @@
         btnLink: "#catalogo",
         imageUrl: "",
         bgColor: "from-red-700 via-brand-red to-orange-600"
+      },
+      {
+        id: "b2",
+        title: "Pack Familiar San Gil en Promoción",
+        subtitle: "Mute, carne oreada, arepas y empanadas para toda la familia",
+        badge: "⭐ Oferta Especial Fin de Semana",
+        btnText: "Pedir Pack Familiar",
+        btnLink: "#catalogo",
+        imageUrl: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=1200&auto=format&fit=crop&q=80",
+        bgColor: "from-amber-700 via-orange-600 to-red-600"
       }
     ];
 
@@ -328,6 +342,15 @@
         fetchGlobalStoreData();
       }, []);
 
+      // Auto-rotación de banners promocionales cada 6 segundos
+      useEffect(() => {
+        if (banners.length <= 1) return;
+        const timer = setInterval(() => {
+          setCurrentBannerIndex(prev => (prev + 1) % banners.length);
+        }, 6000);
+        return () => clearInterval(timer);
+      }, [banners.length]);
+
       // FUNCIÓN MAESTRA: Sube y actualiza los cambios en el HOSTING en tiempo real
       const saveToHosting = async (updatedProducts, updatedBanners, updatedOrders) => {
         setSyncStatus("syncing");
@@ -370,7 +393,7 @@
         }
       };
 
-      // Estado de Checkout
+      // Estado de Checkout con método de pago
       const [customerData, setCustomerData] = useState({
         name: "",
         phone: "",
@@ -378,6 +401,7 @@
         postalCode: "46001",
         date: new Date(Date.now() + 86400000).toISOString().split("T")[0],
         timeSlot: "12:00 - 14:00",
+        paymentMethod: "CASH",
         notes: ""
       });
 
@@ -492,6 +516,13 @@
         const orderCode = `DLS-${Math.floor(1000 + Math.random() * 9000)}`;
         const dayName = getDayNameFromDate(customerData.date);
 
+        const paymentLabels = {
+          CASH: "Pago en Entrega / Recogida (Efectivo o Datáfono)",
+          BIZUM: "Bizum (+34 603 374 784)",
+          CARD: "Tarjeta / Pasarela Online (Enlace Seguro)"
+        };
+        const paymentLabel = paymentLabels[customerData.paymentMethod] || "Pago en Entrega / Recogida";
+
         // 1. Crear el objeto pedido estructurado y persistirlo
         const newOrder = {
           id: `ord_${Date.now()}`,
@@ -501,6 +532,8 @@
           dayName: dayName,
           timeSlot: customerData.timeSlot,
           fulfillment: fulfillment,
+          paymentMethod: customerData.paymentMethod || "CASH",
+          paymentLabel: paymentLabel,
           customer: {
             name: customerData.name,
             phone: customerData.phone,
@@ -538,7 +571,8 @@
           msg += `*Dirección:* ${customerData.address} (CP: ${customerData.postalCode})%0A`;
         }
         msg += `*Fecha de Entrega:* ${customerData.date} (${dayName})%0A`;
-        msg += `*Franja Horaria:* ${customerData.timeSlot}%0A%0A`;
+        msg += `*Franja Horaria:* ${customerData.timeSlot}%0A`;
+        msg += `*Forma de Pago:* ${paymentLabel}%0A%0A`;
         msg += `*DETALLE DE PRODUCTOS:*%0A`;
         cart.forEach(item => {
           const itemPrice = item.isPromo && item.promoPrice ? item.promoPrice : item.price;
@@ -789,7 +823,8 @@
             badge: "OFERTA EXCLUSIVA",
             btnText: "Hacer Pedido Ahora",
             btnLink: "#catalogo",
-            imageUrl: ""
+            imageUrl: "",
+            bgColor: "from-red-700 via-brand-red to-orange-600"
           });
         }
       };
@@ -799,7 +834,8 @@
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({
           updatedAt: new Date().toISOString(),
           products: products,
-          banners: banners
+          banners: banners,
+          orders: orders
         }, null, 2));
         const downloadAnchor = document.createElement("a");
         downloadAnchor.setAttribute("href", dataStr);
@@ -1345,6 +1381,12 @@
                                       <div className="text-[11px] text-stone-500">
                                         Subtotal: {ord.subtotal.toFixed(2)} € {ord.deliveryFee > 0 && `| Envío: ${ord.deliveryFee.toFixed(2)} €`} (IVA incl.)
                                       </div>
+                                      <div className="text-[11px] font-semibold text-stone-700 pt-1 border-t border-stone-200/60 mt-1 flex items-center gap-1">
+                                        <span>💳 Pago:</span>
+                                        <span className="font-bold text-stone-900">
+                                          {ord.paymentMethod === "BIZUM" ? "📲 Bizum" : ord.paymentMethod === "CARD" ? "💳 Tarjeta / Online" : "💶 En Mano / Datáfono"}
+                                        </span>
+                                      </div>
                                       {ord.notes && (
                                         <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-amber-900 text-[11px] font-medium">
                                           ⚠️ <b>Nota:</b> {ord.notes}
@@ -1822,12 +1864,13 @@
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block font-bold text-stone-700 mb-1">Etiqueta Superior</label>
+                      <label className="block font-bold text-stone-700 mb-1">Etiqueta Superior (Badge)</label>
                       <input 
                         type="text" 
                         value={bannerFormData.badge} 
                         onChange={e => setBannerFormData({...bannerFormData, badge: e.target.value})} 
                         className="w-full px-3 py-2 border rounded-lg" 
+                        placeholder="VALENCIA • OFERTA..."
                       />
                     </div>
                     <div>
@@ -1837,7 +1880,33 @@
                         value={bannerFormData.btnText} 
                         onChange={e => setBannerFormData({...bannerFormData, btnText: e.target.value})} 
                         className="w-full px-3 py-2 border rounded-lg" 
+                        placeholder="Ver Catálogo y Encargar"
                       />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-bold text-stone-700 mb-1">Enlace del Botón</label>
+                      <input 
+                        type="text" 
+                        value={bannerFormData.btnLink || ""} 
+                        onChange={e => setBannerFormData({...bannerFormData, btnLink: e.target.value})} 
+                        className="w-full px-3 py-2 border rounded-lg" 
+                        placeholder="#catalogo o enlace web"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-stone-700 mb-1">Color / Degradado de Fondo</label>
+                      <select
+                        value={bannerFormData.bgColor || "from-red-700 via-brand-red to-orange-600"}
+                        onChange={e => setBannerFormData({...bannerFormData, bgColor: e.target.value})}
+                        className="w-full px-3 py-2 border rounded-lg bg-white">
+                        <option value="from-red-700 via-brand-red to-orange-600">🔴 Rojo Santandereano</option>
+                        <option value="from-amber-700 via-orange-600 to-red-600">🟠 Dorado & Naranja Típico</option>
+                        <option value="from-stone-900 via-stone-800 to-red-900">⚫ Elegante Carbón & Vino</option>
+                        <option value="from-emerald-800 via-green-700 to-teal-800">🟢 Verde Campo Andino</option>
+                      </select>
                     </div>
                   </div>
                   <div>
@@ -2067,6 +2136,61 @@
                       className="w-full px-3 py-2 border rounded-lg text-xs" 
                       placeholder="Ej. Ají muy picante aparte, timbre no funciona...">
                     </textarea>
+                  </div>
+
+                  {/* FORMA DE PAGO */}
+                  <div>
+                    <label className="block text-xs font-bold text-stone-700 mb-1.5">Forma de Pago</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <label className={`flex flex-col items-center justify-center p-2 rounded-xl border text-center cursor-pointer transition-all ${customerData.paymentMethod === "CASH" ? "border-brand-red bg-red-50/60 text-brand-red font-bold shadow-sm" : "border-stone-200 bg-white text-stone-600 hover:bg-stone-50"}`}>
+                        <input 
+                          type="radio" 
+                          name="paymentMethod" 
+                          value="CASH" 
+                          checked={customerData.paymentMethod === "CASH"} 
+                          onChange={() => setCustomerData({...customerData, paymentMethod: "CASH"})} 
+                          className="sr-only"
+                        />
+                        <span className="text-base mb-0.5">💶</span>
+                        <span className="text-[11px] leading-tight">En Entrega / Recogida</span>
+                      </label>
+
+                      <label className={`flex flex-col items-center justify-center p-2 rounded-xl border text-center cursor-pointer transition-all ${customerData.paymentMethod === "BIZUM" ? "border-brand-red bg-red-50/60 text-brand-red font-bold shadow-sm" : "border-stone-200 bg-white text-stone-600 hover:bg-stone-50"}`}>
+                        <input 
+                          type="radio" 
+                          name="paymentMethod" 
+                          value="BIZUM" 
+                          checked={customerData.paymentMethod === "BIZUM"} 
+                          onChange={() => setCustomerData({...customerData, paymentMethod: "BIZUM"})} 
+                          className="sr-only"
+                        />
+                        <span className="text-base mb-0.5">📲</span>
+                        <span className="text-[11px] leading-tight">Bizum Directo</span>
+                      </label>
+
+                      <label className={`flex flex-col items-center justify-center p-2 rounded-xl border text-center cursor-pointer transition-all ${customerData.paymentMethod === "CARD" ? "border-brand-red bg-red-50/60 text-brand-red font-bold shadow-sm" : "border-stone-200 bg-white text-stone-600 hover:bg-stone-50"}`}>
+                        <input 
+                          type="radio" 
+                          name="paymentMethod" 
+                          value="CARD" 
+                          checked={customerData.paymentMethod === "CARD"} 
+                          onChange={() => setCustomerData({...customerData, paymentMethod: "CARD"})} 
+                          className="sr-only"
+                        />
+                        <span className="text-base mb-0.5">💳</span>
+                        <span className="text-[11px] leading-tight">Tarjeta / Online</span>
+                      </label>
+                    </div>
+                    {customerData.paymentMethod === "BIZUM" && (
+                      <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-lg text-[11px] text-amber-900">
+                        💡 Envía tu Bizum al número oficial del obrador: <b>+34 603 374 784</b> indicando tu nombre.
+                      </div>
+                    )}
+                    {customerData.paymentMethod === "CARD" && (
+                      <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg text-[11px] text-blue-900">
+                        🔒 Te facilitaremos el enlace de pago seguro con tarjeta al confirmar en WhatsApp o podrás pagar con datáfono contactless.
+                      </div>
+                    )}
                   </div>
 
                   <div className="p-3 bg-stone-50 rounded-xl space-y-1 text-xs">

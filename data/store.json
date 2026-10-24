@@ -102,6 +102,16 @@
       "btnLink": "#catalogo",
       "imageUrl": "",
       "bgColor": "from-red-700 via-brand-red to-orange-600"
+    },
+    {
+      "id": "b2",
+      "title": "Pack Familiar San Gil en Promoción",
+      "subtitle": "Mute, carne oreada, arepas y empanadas para toda la familia",
+      "badge": "⭐ Oferta Especial Fin de Semana",
+      "btnText": "Pedir Pack Familiar",
+      "btnLink": "#catalogo",
+      "imageUrl": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=1200&auto=format&fit=crop&q=80",
+      "bgColor": "from-amber-700 via-orange-600 to-red-600"
     }
   ],
   "orders": []
