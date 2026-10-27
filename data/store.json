@@ -138,7 +138,7 @@
       "badge": "Valencia • Auténtico Sabor Colombiano",
       "btnText": "Ver Catálogo y Encargar",
       "btnLink": "#catalogo",
-      "imageUrl": "",
+      "imageUrl": "https://images.unsplash.com/photo-1544025162-d76694265947?w=1200&auto=format&fit=crop&q=80",
       "bgColor": "from-red-700 via-brand-red to-orange-600"
     },
     {

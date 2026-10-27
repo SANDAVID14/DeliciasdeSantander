@@ -149,7 +149,7 @@
         badge: "Valencia • Auténtico Sabor Colombiano",
         btnText: "Ver Catálogo y Encargar",
         btnLink: "#catalogo",
-        imageUrl: "",
+        imageUrl: "https://images.unsplash.com/photo-1544025162-d76694265947?w=1200&auto=format&fit=crop&q=80",
         bgColor: "from-red-700 via-brand-red to-orange-600"
       },
       {
@@ -326,38 +326,87 @@
       });
       const [isGitHubModalOpen, setIsGitHubModalOpen] = useState(false);
       const [isSyncingGitHub, setIsSyncingGitHub] = useState(false);
+      const [testGhResult, setTestGhResult] = useState(null);
+      const [isTestingGh, setIsTestingGh] = useState(false);
+
+      const handleTestGitHubConnection = async () => {
+        if (!githubToken.trim()) {
+          setTestGhResult({ success: false, message: "⚠️ Ingrese un Personal Access Token antes de probar." });
+          return;
+        }
+        setIsTestingGh(true);
+        setTestGhResult(null);
+        try {
+          const res = await fetch(`https://api.github.com/repos/${githubRepo.trim()}`, {
+            headers: {
+              "Authorization": `Bearer ${githubToken.trim()}`,
+              "Accept": "application/vnd.github+json"
+            }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const canPush = data.permissions && data.permissions.push;
+            if (canPush) {
+              setTestGhResult({ success: true, message: `✅ ¡Conectado a ${data.full_name}! Permisos de escritura (push) confirmados.` });
+            } else {
+              setTestGhResult({ success: false, message: `⚠️ Conectado a ${data.full_name}, pero el token no tiene permisos de escritura (repo).` });
+            }
+          } else {
+            const err = await res.json().catch(() => ({}));
+            setTestGhResult({ success: false, message: `❌ Error (${res.status}): ${err.message || "Token inválido o sin acceso"}` });
+          }
+        } catch (e) {
+          setTestGhResult({ success: false, message: `❌ Error de conexión: ${e.message}` });
+        } finally {
+          setIsTestingGh(false);
+        }
+      };
 
       // Cargar datos CENTRALIZADOS desde el hosting / API al iniciar la web
       useEffect(() => {
         async function fetchGlobalStoreData() {
           try {
             setSyncStatus("syncing");
-            setSyncMessage("Cargando datos actualizados...");
+            setSyncMessage("Cargando catálogo actualizado...");
 
-            let remoteData = null;
-            // Probar endpoints: api/sync, api/sync.php y data/store.json con cache buster
-            const endpoints = [
-              "./api/sync?t=" + Date.now(),
-              "./api/sync.php?t=" + Date.now(),
-              "./data/store.json?t=" + Date.now()
-            ];
+            const isLocal = window.location.hostname === "localhost" || 
+                            window.location.hostname === "127.0.0.1" || 
+                            window.location.hostname.startsWith("192.168.");
+
+            // Priorizamos la fuente directa más rápida y actualizada según el entorno
+            const endpoints = isLocal
+              ? [
+                  "./api/sync?t=" + Date.now(),
+                  "./data/store.json?t=" + Date.now(),
+                  "https://raw.githubusercontent.com/SANDAVID14/DeliciasdeSantander/master/data/store.json?t=" + Date.now()
+                ]
+              : [
+                  "https://raw.githubusercontent.com/SANDAVID14/DeliciasdeSantander/master/data/store.json?t=" + Date.now(),
+                  "./data/store.json?t=" + Date.now(),
+                  "./api/sync?t=" + Date.now()
+                ];
+
+            let bestData = null;
 
             for (const ep of endpoints) {
               try {
-                const res = await fetch(ep);
+                const res = await fetch(ep, { cache: "no-store" });
                 if (res.ok) {
                   const json = await res.json();
                   if (json && (Array.isArray(json.products) || Array.isArray(json.banners))) {
-                    remoteData = json;
-                    break;
+                    if (!bestData || (json.updatedAt && (!bestData.updatedAt || new Date(json.updatedAt) > new Date(bestData.updatedAt)))) {
+                      bestData = json;
+                    }
                   }
                 }
-              } catch (e) {}
+              } catch (e) {
+                // Siguiente endpoint
+              }
             }
 
-            if (remoteData) {
+            if (bestData) {
               const localUpdatedAt = localStorage.getItem("dls_updated_at");
-              const remoteUpdatedAt = remoteData.updatedAt;
+              const remoteUpdatedAt = bestData.updatedAt;
 
               // Comprobar si las modificaciones locales son más recientes que el archivo remoto
               const hasLocalModifications = localUpdatedAt && remoteUpdatedAt && new Date(localUpdatedAt) > new Date(remoteUpdatedAt);
@@ -377,35 +426,35 @@
                 setOrders(ords);
 
                 setSyncStatus("connected");
-                setSyncMessage("🟢 Conectado (Sincronizando cambios locales con el servidor)");
+                setSyncMessage("🟢 Conectado (Sincronizando cambios locales...)");
 
-                // Sincronizar automáticamente hacia el servidor para actualizar store.json
+                // Sincronizar automáticamente hacia el servidor / GitHub
                 saveToHosting(prods, bans, ords);
               } else {
                 // El servidor es más reciente o no hay modificaciones locales previas
-                if (remoteData.products && Array.isArray(remoteData.products)) {
-                  setProducts(remoteData.products);
-                  localStorage.setItem("dls_products_cache", JSON.stringify(remoteData.products));
+                if (bestData.products && Array.isArray(bestData.products)) {
+                  setProducts(bestData.products);
+                  localStorage.setItem("dls_products_cache", JSON.stringify(bestData.products));
                 }
-                if (remoteData.banners && Array.isArray(remoteData.banners)) {
-                  setBanners(remoteData.banners);
-                  localStorage.setItem("dls_banners_cache", JSON.stringify(remoteData.banners));
+                if (bestData.banners && Array.isArray(bestData.banners)) {
+                  setBanners(bestData.banners);
+                  localStorage.setItem("dls_banners_cache", JSON.stringify(bestData.banners));
                 }
-                if (remoteData.orders && Array.isArray(remoteData.orders) && remoteData.orders.length > 0) {
-                  setOrders(remoteData.orders);
-                  localStorage.setItem("dls_orders", JSON.stringify(remoteData.orders));
+                if (bestData.orders && Array.isArray(bestData.orders) && bestData.orders.length > 0) {
+                  setOrders(bestData.orders);
+                  localStorage.setItem("dls_orders", JSON.stringify(bestData.orders));
                 }
                 if (remoteUpdatedAt) {
                   localStorage.setItem("dls_updated_at", remoteUpdatedAt);
                 }
                 setSyncStatus("connected");
-                setSyncMessage("🟢 Conectado en vivo con el hosting oficial");
+                setSyncMessage("🟢 Conectado en vivo (Catálogo oficial actualizado)");
               }
             } else {
               fallbackToCache();
             }
           } catch (err) {
-            console.warn("No se pudo conectar con el endpoint del hosting, usando datos locales/cacheados:", err);
+            console.warn("No se pudo conectar con el endpoint del hosting, usando datos locales:", err);
             fallbackToCache();
           }
         }
@@ -422,6 +471,16 @@
         }
 
         fetchGlobalStoreData();
+
+        // Actualización al enfocar la pestaña y sondeo periódico cada 45 segundos
+        const onFocus = () => fetchGlobalStoreData();
+        window.addEventListener("focus", onFocus);
+        const pollTimer = setInterval(fetchGlobalStoreData, 45000);
+
+        return () => {
+          window.removeEventListener("focus", onFocus);
+          clearInterval(pollTimer);
+        };
       }, []);
 
       // Auto-rotación de banners promocionales cada 6 segundos
@@ -573,6 +632,12 @@
         } else {
           setSyncStatus("offline");
           setSyncMessage("💾 Cambios guardados localmente en este dispositivo");
+          const isLocal = window.location.hostname === "localhost" || 
+                          window.location.hostname === "127.0.0.1" || 
+                          window.location.hostname.startsWith("192.168.");
+          if (!isLocal && !currentGhToken) {
+            setIsGitHubModalOpen(true);
+          }
         }
       };
 
@@ -1152,6 +1217,49 @@
                 </div>
               )}
 
+              {/* BARRA DE CONFIANZA Y DIFERENCIACIÓN GASTRONÓMICA */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-8">
+                <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-stone-200/80 shadow-xs flex items-center gap-3 hover:border-red-200 transition-colors">
+                  <div className="w-10 h-10 rounded-lg bg-red-50 text-brand-red flex items-center justify-center text-xl shrink-0">
+                    🌽
+                  </div>
+                  <div>
+                    <h4 className="text-xs sm:text-sm font-bold text-stone-900 leading-tight">Maíz Pelao Real</h4>
+                    <p className="text-[11px] text-stone-500">Masa artesanal con chicharrón</p>
+                  </div>
+                </div>
+
+                <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-stone-200/80 shadow-xs flex items-center gap-3 hover:border-orange-200 transition-colors">
+                  <div className="w-10 h-10 rounded-lg bg-orange-50 text-orange-600 flex items-center justify-center text-xl shrink-0">
+                    🍲
+                  </div>
+                  <div>
+                    <h4 className="text-xs sm:text-sm font-bold text-stone-900 leading-tight">Mute a Fuego Lento</h4>
+                    <p className="text-[11px] text-stone-500">Receta tradicional de Santander</p>
+                  </div>
+                </div>
+
+                <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-stone-200/80 shadow-xs flex items-center gap-3 hover:border-amber-200 transition-colors">
+                  <div className="w-10 h-10 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center text-xl shrink-0">
+                    🛵
+                  </div>
+                  <div>
+                    <h4 className="text-xs sm:text-sm font-bold text-stone-900 leading-tight">Envíos en Valencia</h4>
+                    <p className="text-[11px] text-stone-500">O recogida en C/ Sierra Martes 25</p>
+                  </div>
+                </div>
+
+                <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-stone-200/80 shadow-xs flex items-center gap-3 hover:border-green-200 transition-colors">
+                  <div className="w-10 h-10 rounded-lg bg-green-50 text-green-700 flex items-center justify-center text-xl shrink-0">
+                    🛡️
+                  </div>
+                  <div>
+                    <h4 className="text-xs sm:text-sm font-bold text-stone-900 leading-tight">Pago Cómodo & Seguro</h4>
+                    <p className="text-[11px] text-stone-500">Bizum, tarjeta o al recibir</p>
+                  </div>
+                </div>
+              </div>
+
               {/* BARRA DE NAVEGACIÓN DE CATEGORÍAS */}
               <div id="catalogo" className="sticky top-[80px] z-30 bg-white/95 backdrop-blur-md py-3 border-y border-stone-200 -mx-4 px-4 mb-8 flex items-center justify-between gap-2 overflow-x-auto no-scrollbar shadow-sm">
                 <div className="flex items-center gap-2 min-w-max">
@@ -1228,9 +1336,10 @@
 
                         {/* SECCIÓN PRECIO + DÍAS DE DESPACHO + BOTONES */}
                         <div className="p-5 pt-0 border-t border-stone-100 mt-auto bg-stone-50/60">
-                          <div className="py-2.5 border-b border-stone-200/60 mb-3">
-                            <span className="text-[11px] font-bold text-stone-700 block">
-                              📦 Para despachar el los dias - "{product.availableDays && product.availableDays.length > 0 ? product.availableDays.join(", ") : "Todos los días"}"
+                          <div className="py-2 border-b border-stone-200/60 mb-3 flex items-center gap-1.5">
+                            <span className="text-xs">📅</span>
+                            <span className="text-[11px] font-semibold text-stone-700">
+                              <b className="font-bold text-stone-900">Días de despacho:</b> {product.availableDays && product.availableDays.length > 0 ? product.availableDays.join(", ") : "Martes a Domingo"}
                             </span>
                           </div>
 
@@ -1238,10 +1347,10 @@
                             <div>
                               <span className="text-[10px] text-stone-400 block font-semibold uppercase">Precio</span>
                               <div className="flex items-baseline gap-2">
-                                <span className="text-2xl font-black text-brand-charcoal">{finalPrice.toFixed(2)} €</span>
+                                <span className="text-2xl font-black text-brand-charcoal">{Number(finalPrice).toFixed(2)} €</span>
                                 {hasPromo && (
                                   <span className="text-xs text-stone-400 line-through font-semibold">
-                                    {product.price.toFixed(2)} €
+                                    {Number(product.price).toFixed(2)} €
                                   </span>
                                 )}
                               </div>
@@ -1328,6 +1437,24 @@
                         </span>
                       </div>
                     </div>
+
+                    {/* AVISO AUTOMÁTICO SI SE INICIA EN GITHUB PAGES SIN TOKEN */}
+                    {(!githubToken && typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" && !window.location.hostname.startsWith("192.168.")) && (
+                      <div className="w-full bg-amber-50 border border-amber-200 p-3.5 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-amber-900">
+                        <div className="flex items-center gap-2.5">
+                          <span className="text-xl">💡</span>
+                          <div>
+                            <p className="font-extrabold text-amber-950">Panel conectado en GitHub Pages en vivo</p>
+                            <p className="text-amber-800 text-[11px] mt-0.5">Para que cualquier cambio que hagas en el menú o precios desde tu celular se publique al instante en GitHub y lo vean todos los clientes, ingresa tu Token de GitHub.</p>
+                          </div>
+                        </div>
+                        <button 
+                          onClick={() => setIsGitHubModalOpen(true)}
+                          className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-xs shadow-sm whitespace-nowrap active:scale-95 transition-all">
+                          ⚙️ Configurar Token (1 clic)
+                        </button>
+                      </div>
+                    )}
                     <div className="flex flex-wrap gap-2 items-center">
                       <button 
                         onClick={async () => {
@@ -2656,40 +2783,83 @@
                     />
                   </div>
                   <div>
-                    <label className="block font-bold text-stone-700 mb-1">Personal Access Token de GitHub (PAT)</label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block font-bold text-stone-700">Personal Access Token de GitHub (PAT)</label>
+                      <a 
+                        href="https://github.com/settings/tokens/new?scopes=repo&description=Delicias+de+Santander+Admin" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-brand-red font-semibold underline text-[11px] hover:text-brand-darkRed flex items-center gap-1">
+                        🔑 Crear token en GitHub ↗
+                      </a>
+                    </div>
                     <input 
                       type="password" 
                       value={githubToken} 
                       onChange={e => setGithubToken(e.target.value)} 
-                      className="w-full px-3 py-2 border rounded-lg font-mono text-xs" 
+                      className="w-full px-3 py-2 border rounded-lg font-mono text-xs focus:ring-2 focus:ring-brand-red focus:outline-none" 
                       placeholder="github_pat_... o ghp_..."
                     />
-                    <span className="text-[10px] text-stone-400 mt-1 block">
-                      Se almacena de forma segura en este dispositivo (localStorage). Solo requiere permiso de lectura/escritura de contenidos (`Contents: read & write`).
+                    <span className="text-[10px] text-stone-500 mt-1 block">
+                      Se almacena únicamente en este dispositivo (localStorage). Solo requiere permiso de <b>repo</b> o <b>Contents: read & write</b>.
                     </span>
                   </div>
+
+                  {/* RESULTADO DE LA PRUEBA */}
+                  {testGhResult && (
+                    <div className={`p-2.5 rounded-lg text-xs font-semibold ${testGhResult.success ? "bg-green-50 text-green-800 border border-green-200" : "bg-red-50 text-red-800 border border-red-200"}`}>
+                      {testGhResult.message}
+                    </div>
+                  )}
                 </div>
 
-                <div className="flex justify-end gap-2">
+                <div className="flex items-center justify-between gap-2 pt-2 border-t">
                   <button 
-                    onClick={() => setIsGitHubModalOpen(false)} 
-                    className="px-4 py-2 border rounded-lg font-bold text-xs text-stone-600">
-                    Cerrar
+                    onClick={handleTestGitHubConnection}
+                    disabled={isTestingGh}
+                    className="px-3 py-2 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-lg font-bold text-xs border flex items-center gap-1 transition-all">
+                    <span>{isTestingGh ? "⏳ Probando..." : "🔍 Probar Conexión"}</span>
                   </button>
-                  <button 
-                    onClick={() => {
-                      localStorage.setItem("dls_github_token", githubToken);
-                      localStorage.setItem("dls_github_repo", githubRepo);
-                      setIsGitHubModalOpen(false);
-                      alert("Configuración de GitHub guardada en este dispositivo.");
-                    }} 
-                    className="px-4 py-2 bg-brand-red text-white rounded-lg font-bold text-xs hover:bg-brand-darkRed shadow-md">
-                    Guardar Configuración
-                  </button>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => setIsGitHubModalOpen(false)} 
+                      className="px-3.5 py-2 border rounded-lg font-bold text-xs text-stone-600 hover:bg-stone-50">
+                      Cerrar
+                    </button>
+                    <button 
+                      onClick={() => {
+                        localStorage.setItem("dls_github_token", githubToken.trim());
+                        localStorage.setItem("dls_github_repo", githubRepo.trim());
+                        setIsGitHubModalOpen(false);
+                        alert("✅ Configuración de GitHub guardada exitosamente en este dispositivo.");
+                      }} 
+                      className="px-4 py-2 bg-brand-red text-white rounded-lg font-bold text-xs hover:bg-brand-darkRed shadow-md active:scale-95 transition-all">
+                      Guardar y Conectar
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
           )}
+
+          {/* BOTÓN FLOTANTE DE ASISTENCIA Y PEDIDOS POR WHATSAPP */}
+          <a
+            href="https://wa.me/34603374784?text=Hola%20Delicias%20de%20Santander%20VLC%2C%20quisiera%20hacer%20una%20consulta%20o%20encargar%20un%20pedido."
+            target="_blank"
+            rel="noopener noreferrer"
+            className="fixed bottom-6 right-6 z-40 flex items-center gap-2.5 px-4 py-3 bg-[#25D366] text-white rounded-full shadow-2xl hover:bg-[#20ba59] hover:scale-105 active:scale-95 transition-all duration-200 group border-2 border-white/80"
+            title="Pedir o consultar por WhatsApp"
+          >
+            <span className="text-xl">💬</span>
+            <span className="font-extrabold text-xs sm:text-sm tracking-wide hidden sm:inline-block">
+              ¿Preguntas o Encargos? Escríbenos
+            </span>
+            <span className="font-extrabold text-xs sm:hidden">WhatsApp</span>
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span>
+            </span>
+          </a>
         </div>
       );
     }
