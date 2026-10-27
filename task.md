@@ -57,3 +57,18 @@ Finalizar y consolidar la plataforma de venta online y panel administrativo para
   - Comprobación de meta-tags responsive (`viewport`), breakpoints de Tailwind (`sm:`, `md:`, `lg:`), grillas adaptables de 1 a 3 columnas, y drawer móvil de carrito.
 - [x] **5.3. Build & Deploy**:
   - Generados y validados artefactos de despliegue para Vercel (`vercel.json`), Netlify (`netlify.toml`), Cloudflare Pages (`_headers`), servidor Node.js (`server.js`, `api/sync.js`), Apache/cPanel con PHP (`api/sync.php`), y paquete ZIP de distribución listo para producción (`Delicias_de_Santander_VLC_Sincronizacion_Hosting.zip`).
+
+---
+
+## Fase 6: Persistencia y Sincronización Bidireccional Administrador / Index
+- [x] **6.1. Diagnóstico de Pérdida de Cambios**:
+  - Se identificó que al recargar la página, `fetchGlobalStoreData` sobrescribía incondicionalmente el `localStorage` con la versión estática de `store.json`, eliminando las modificaciones locales del administrador.
+  - La inicialización de `products` y `banners` no leía la caché de `localStorage` al montar el componente, causando inconsistencias visuales temporales.
+- [x] **6.2. Implementación de Sincronización con Timestamps**:
+  - Comparación inteligente de `updatedAt`: si las modificaciones locales son más recientes que el archivo remoto, se conservan y se transmiten automáticamente a los endpoints del servidor.
+  - Inicialización inmediata de `products` y `banners` desde `localStorage`.
+  - Servidor ligero Python `server.py` implementado para entorno de desarrollo local con soporte para `GET`/`POST` `/api/sync` y `/api/sync.php`.
+- [x] **6.3. Verificación Integral**:
+  - Comprobación de flujo completo: edición de producto en panel admin ➔ persistencia en `data/store.json` ➔ reflejo instantáneo en vista tienda (index) ➔ persistencia confirmada tras recargar la página.
+- [x] **6.4. Git y GitHub**:
+  - Actualización de repositorio local y remoto en GitHub con todos los cambios y artefactos.

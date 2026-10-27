@@ -15,5 +15,8 @@ Hemos implementado una **arquitectura en tiempo real cliente-servidor**:
 2. Asegúrate de que la carpeta `/data` tenga permisos de lectura y escritura (`755` o `775`).
 3. ¡Listo! Todo funciona automáticamente con PHP sin necesidad de bases de datos complejas.
 
-## Si tu hosting es Node.js (Vercel, VPS, Render)
+## Si tu hosting o entorno es Node.js (Vercel, VPS, Render)
 - Ejecuta `npm install express cors` y arranca con `node server.js`.
+
+## Si ejecutas localmente con Python (Windows / Mac / Linux)
+- Ejecuta `python server.py` y abre `http://localhost:3000`.

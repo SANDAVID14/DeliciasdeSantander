@@ -167,10 +167,10 @@
     const INITIAL_PRODUCTS = [
       {
         id: "p1",
-        name: "Arepa Santandereana Típica (Pack x 5)",
+        name: "Arepa Santandereana Artesanal (Pack x 5)",
         category: "arepas",
-        price: 9.50,
-        promoPrice: 8.50,
+        price: 11.50,
+        promoPrice: 10.00,
         isPromo: true,
         badge: "⭐ Receta Tradicional",
         prepTime: "24h",
@@ -270,9 +270,31 @@
 
       // Estado de Sincronización Global
       const [syncStatus, setSyncStatus] = useState("loading"); // "connected", "offline", "syncing"
-      const [syncMessage, setSyncMessage] = useState("Sincronizando con hosting...");
-      const [products, setProducts] = useState(INITIAL_PRODUCTS);
-      const [banners, setBanners] = useState(INITIAL_BANNERS);
+      const [syncMessage, setSyncMessage] = useState("Sincronizando catálogo y pedidos...");
+      const [products, setProducts] = useState(() => {
+        try {
+          const saved = localStorage.getItem("dls_products_cache");
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          }
+        } catch (e) {
+          console.warn("Error leyendo dls_products_cache de localStorage", e);
+        }
+        return INITIAL_PRODUCTS;
+      });
+      const [banners, setBanners] = useState(() => {
+        try {
+          const saved = localStorage.getItem("dls_banners_cache");
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          }
+        } catch (e) {
+          console.warn("Error leyendo dls_banners_cache de localStorage", e);
+        }
+        return INITIAL_BANNERS;
+      });
       const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
 
       // ESTADO DE PEDIDOS (Persistencia en localStorage y hosting)
@@ -295,30 +317,80 @@
       const [isProductionSheetOpen, setIsProductionSheetOpen] = useState(false);
       const [productionSheetDate, setProductionSheetDate] = useState(new Date().toISOString().split("T")[0]);
 
-      // Cargar datos CENTRALIZADOS desde el hosting al iniciar la web
+      // Cargar datos CENTRALIZADOS desde el hosting / API al iniciar la web
       useEffect(() => {
         async function fetchGlobalStoreData() {
           try {
             setSyncStatus("syncing");
-            setSyncMessage("Cargando datos actualizados del hosting...");
-            // Intenta leer el archivo central del hosting
-            const response = await fetch("./data/store.json?t=" + new Date().getTime());
-            if (response.ok) {
-              const data = await response.json();
-              if (data.products && Array.isArray(data.products)) {
-                setProducts(data.products);
-                localStorage.setItem("dls_products_cache", JSON.stringify(data.products));
+            setSyncMessage("Cargando datos actualizados...");
+
+            let remoteData = null;
+            // Probar endpoints: api/sync, api/sync.php y data/store.json con cache buster
+            const endpoints = [
+              "./api/sync?t=" + Date.now(),
+              "./api/sync.php?t=" + Date.now(),
+              "./data/store.json?t=" + Date.now()
+            ];
+
+            for (const ep of endpoints) {
+              try {
+                const res = await fetch(ep);
+                if (res.ok) {
+                  const json = await res.json();
+                  if (json && (Array.isArray(json.products) || Array.isArray(json.banners))) {
+                    remoteData = json;
+                    break;
+                  }
+                }
+              } catch (e) {}
+            }
+
+            if (remoteData) {
+              const localUpdatedAt = localStorage.getItem("dls_updated_at");
+              const remoteUpdatedAt = remoteData.updatedAt;
+
+              // Comprobar si las modificaciones locales son más recientes que el archivo remoto
+              const hasLocalModifications = localUpdatedAt && remoteUpdatedAt && new Date(localUpdatedAt) > new Date(remoteUpdatedAt);
+
+              if (hasLocalModifications) {
+                console.info("Modificaciones locales detectadas más recientes que el servidor. Conservando y sincronizando...");
+                const cachedProds = localStorage.getItem("dls_products_cache");
+                const cachedBans = localStorage.getItem("dls_banners_cache");
+                const cachedOrders = localStorage.getItem("dls_orders");
+
+                const prods = cachedProds ? JSON.parse(cachedProds) : products;
+                const bans = cachedBans ? JSON.parse(cachedBans) : banners;
+                const ords = cachedOrders ? JSON.parse(cachedOrders) : orders;
+
+                setProducts(prods);
+                setBanners(bans);
+                setOrders(ords);
+
+                setSyncStatus("connected");
+                setSyncMessage("🟢 Conectado (Sincronizando cambios locales con el servidor)");
+
+                // Sincronizar automáticamente hacia el servidor para actualizar store.json
+                saveToHosting(prods, bans, ords);
+              } else {
+                // El servidor es más reciente o no hay modificaciones locales previas
+                if (remoteData.products && Array.isArray(remoteData.products)) {
+                  setProducts(remoteData.products);
+                  localStorage.setItem("dls_products_cache", JSON.stringify(remoteData.products));
+                }
+                if (remoteData.banners && Array.isArray(remoteData.banners)) {
+                  setBanners(remoteData.banners);
+                  localStorage.setItem("dls_banners_cache", JSON.stringify(remoteData.banners));
+                }
+                if (remoteData.orders && Array.isArray(remoteData.orders) && remoteData.orders.length > 0) {
+                  setOrders(remoteData.orders);
+                  localStorage.setItem("dls_orders", JSON.stringify(remoteData.orders));
+                }
+                if (remoteUpdatedAt) {
+                  localStorage.setItem("dls_updated_at", remoteUpdatedAt);
+                }
+                setSyncStatus("connected");
+                setSyncMessage("🟢 Conectado en vivo con el hosting oficial");
               }
-              if (data.banners && Array.isArray(data.banners)) {
-                setBanners(data.banners);
-                localStorage.setItem("dls_banners_cache", JSON.stringify(data.banners));
-              }
-              if (data.orders && Array.isArray(data.orders) && data.orders.length > 0) {
-                setOrders(data.orders);
-                localStorage.setItem("dls_orders", JSON.stringify(data.orders));
-              }
-              setSyncStatus("connected");
-              setSyncMessage("🟢 Conectado en vivo con el hosting oficial");
             } else {
               fallbackToCache();
             }
@@ -336,7 +408,7 @@
           if (cachedBans) setBanners(JSON.parse(cachedBans));
           if (cachedOrders) setOrders(JSON.parse(cachedOrders));
           setSyncStatus("connected");
-          setSyncMessage("🟢 Modo Autónomo (Listo para sincronizar)");
+          setSyncMessage("🟢 Modo Autónomo (Datos guardados localmente)");
         }
 
         fetchGlobalStoreData();
@@ -354,55 +426,53 @@
       // FUNCIÓN MAESTRA: Sube y actualiza los cambios en el HOSTING en tiempo real
       const saveToHosting = async (updatedProducts, updatedBanners, updatedOrders) => {
         setSyncStatus("syncing");
-        setSyncMessage("⏳ Publicando cambios en el servidor del hosting...");
+        setSyncMessage("⏳ Publicando cambios en el servidor...");
 
         const prods = updatedProducts !== undefined ? updatedProducts : products;
         const bans = updatedBanners !== undefined ? updatedBanners : banners;
         const ords = updatedOrders !== undefined ? updatedOrders : orders;
+        const nowIso = new Date().toISOString();
 
-        // 1. Guardar en caché del navegador actual
+        // 1. Guardar INMEDIATAMENTE en caché del navegador actual
         localStorage.setItem("dls_products_cache", JSON.stringify(prods));
         localStorage.setItem("dls_banners_cache", JSON.stringify(bans));
         localStorage.setItem("dls_orders", JSON.stringify(ords));
+        localStorage.setItem("dls_updated_at", nowIso);
 
         const payload = {
           token: "Santander2026*", // Token de seguridad verificado en backend
-          updatedAt: new Date().toISOString(),
+          updatedAt: nowIso,
           products: prods,
           banners: bans,
           orders: ords
         };
 
-        try {
-          let res = await fetch(API_ENDPOINT, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-          });
+        // Probar endpoints de sincronización disponibles
+        const endpoints = [API_ENDPOINT, "./api/sync", "./api/sync.php", "/api/sync", "/api/sync.php"];
+        let success = false;
 
-          // Si el servidor usa Node o Vercel sin PHP, probar ruta alternativa ./api/sync
-          if (!res.ok && res.status === 404) {
-            try {
-              res = await fetch("./api/sync", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload)
-              });
-            } catch (errFallback) {
-              // Si falla, se maneja en el bloque principal
+        for (const ep of endpoints) {
+          try {
+            const res = await fetch(ep, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
+            });
+            if (res.ok) {
+              success = true;
+              break;
             }
+          } catch (e) {
+            // probar siguiente endpoint
           }
+        }
 
-          if (res.ok) {
-            setSyncStatus("connected");
-            setSyncMessage("✅ ¡Cambios guardados y publicados para TODOS los visitantes!");
-          } else {
-            throw new Error("El hosting no respondió favorablemente. Verifique permisos de escritura.");
-          }
-        } catch (e) {
-          console.error("Error al sincronizar con hosting:", e);
+        if (success) {
+          setSyncStatus("connected");
+          setSyncMessage("✅ ¡Cambios guardados y publicados para TODOS los visitantes!");
+        } else {
           setSyncStatus("offline");
-          setSyncMessage("⚠️ Guardado localmente en tu navegador.");
+          setSyncMessage("💾 Cambios guardados localmente (Se sincronizarán con el hosting)");
         }
       };
 
@@ -720,13 +790,13 @@
             name: prod.name,
             category: prod.category || "platos",
             price: prod.price,
-            promoPrice: prod.promoPrice !== null ? prod.promoPrice : "",
+            promoPrice: prod.promoPrice !== null && prod.promoPrice !== undefined ? prod.promoPrice : "",
             isPromo: prod.isPromo || false,
             badge: prod.badge || "",
             prepTime: prod.prepTime || "24h",
             availableDays: prod.availableDays || ["Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"],
             description: prod.description || "",
-            allergens: prod.allergens ? prod.allergens.join(", ") : "",
+            allergens: Array.isArray(prod.allergens) ? prod.allergens.join(", ") : (prod.allergens || ""),
             ingredients: prod.ingredients || "",
             imageUrl: prod.imageUrl || ""
           });
@@ -753,7 +823,11 @@
       // Guardar Producto y SINCRONIZAR AL HOSTING
       const handleSaveProduct = async (e) => {
         e.preventDefault();
-        const allergensList = productFormData.allergens.split(",").map(a => a.trim()).filter(Boolean);
+        const allergensList = Array.isArray(productFormData.allergens)
+          ? productFormData.allergens
+          : (typeof productFormData.allergens === "string"
+              ? productFormData.allergens.split(",").map(a => a.trim()).filter(Boolean)
+              : []);
         const updatedProduct = {
           ...productFormData,
           price: parseFloat(productFormData.price) || 0,
@@ -772,7 +846,7 @@
         setEditingProduct(null);
 
         // Envío directo al hosting
-        await saveToHosting(newProductsList, banners);
+        await saveToHosting(newProductsList, banners, orders);
       };
 
       // Eliminar Producto y SINCRONIZAR AL HOSTING
@@ -780,7 +854,7 @@
         if (confirm("¿Estás seguro de que deseas eliminar este producto de la web oficial?")) {
           const newProductsList = products.filter(p => p.id !== id);
           setProducts(newProductsList);
-          await saveToHosting(newProductsList, banners);
+          await saveToHosting(newProductsList, banners, orders);
         }
       };
 
@@ -820,7 +894,7 @@
         setEditingBanner(null);
 
         // Envío directo al hosting
-        await saveToHosting(products, newBannersList);
+        await saveToHosting(products, newBannersList, orders);
       };
 
       const openBannerEditor = (b = null) => {
@@ -1009,8 +1083,10 @@
                 {products
                   .filter(p => selectedCategory === "todos" || p.category === selectedCategory)
                   .map(product => {
-                    const hasPromo = product.isPromo && product.promoPrice !== null && product.promoPrice < product.price;
-                    const finalPrice = hasPromo ? product.promoPrice : product.price;
+                    const numPrice = Number(product.price) || 0;
+                    const numPromo = product.promoPrice !== null && product.promoPrice !== undefined ? Number(product.promoPrice) : null;
+                    const hasPromo = product.isPromo && numPromo !== null && numPromo < numPrice;
+                    const finalPrice = hasPromo ? numPromo : numPrice;
 
                     return (
                       <div key={product.id} className="bg-white rounded-2xl border border-stone-200 overflow-hidden shadow-sm hover:shadow-lg transition-all flex flex-col justify-between">
@@ -1586,7 +1662,7 @@
                                   onClick={async () => {
                                     const newBans = banners.filter(x => x.id !== b.id);
                                     setBanners(newBans);
-                                    await saveToHosting(products, newBans);
+                                    await saveToHosting(products, newBans, orders);
                                   }} 
                                   className="px-3 py-1 bg-red-50 text-brand-red rounded text-xs font-bold">
                                   🗑️ Quitar

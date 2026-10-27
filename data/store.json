@@ -1,18 +1,27 @@
 {
-  "updatedAt": "2026-10-23T10:00:00Z",
+  "updatedAt": "2026-10-27T13:09:11.567759Z",
   "products": [
     {
       "id": "p1",
-      "name": "Arepa Santandereana Típica (Pack x 5)",
+      "name": "Arepa Santandereana Artesanal (Pack x 5)",
       "category": "arepas",
-      "price": 9.5,
-      "promoPrice": 8.5,
+      "price": 11.5,
+      "promoPrice": 10.0,
       "isPromo": true,
       "badge": "⭐ Receta Tradicional",
       "prepTime": "24h",
-      "availableDays": ["Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"],
+      "availableDays": [
+        "Martes",
+        "Miércoles",
+        "Jueves",
+        "Viernes",
+        "Sábado",
+        "Domingo"
+      ],
       "description": "Elaborada con maíz pelao cocido en ceniza y chicharrón de cerdo molido en la masa. Textura crocante por fuera y suave por dentro.",
-      "allergens": ["Sin gluten de origen (elaborado en obrador mixto)"],
+      "allergens": [
+        "Sin gluten de origen (elaborado en obrador mixto)"
+      ],
       "ingredients": "Maíz amarillo pelao, chicharrón crujiente molido, sal yucateca y mantequilla artesana.",
       "imageUrl": "https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=600&auto=format&fit=crop&q=80"
     },
@@ -25,9 +34,15 @@
       "isPromo": false,
       "badge": "🔥 Plato Insignia",
       "prepTime": "48h",
-      "availableDays": ["Viernes", "Sábado", "Domingo"],
+      "availableDays": [
+        "Viernes",
+        "Sábado",
+        "Domingo"
+      ],
       "description": "Sopa tradicional espesada con callo de ternera, costilla, cerdo, maíz blanco pelao, frijol verde, garbanzos y legumbres frescas con guiso criollo.",
-      "allergens": ["Apio"],
+      "allergens": [
+        "Apio"
+      ],
       "ingredients": "Costilla de cerdo, callo limpio vacuno, maíz dulce, frijol tierno, papa pastusa, ahogado de cebolla junca y tomate maduro.",
       "imageUrl": "https://images.unsplash.com/photo-1547592166-23ac45744acd?w=600&auto=format&fit=crop&q=80"
     },
@@ -40,7 +55,12 @@
       "isPromo": true,
       "badge": "🥩 Especialidad",
       "prepTime": "24h",
-      "availableDays": ["Jueves", "Viernes", "Sábado", "Domingo"],
+      "availableDays": [
+        "Jueves",
+        "Viernes",
+        "Sábado",
+        "Domingo"
+      ],
       "description": "Corte selecto de ternera marinado con especias santandereanas, curado al aire y sellado al calor vivo del carbón. Acompañado de yuca al vapor.",
       "allergens": [],
       "ingredients": "Ternera de primera calidad, aliño casero con comino, ajo fresco, sal marina y naranja agria.",
@@ -55,7 +75,14 @@
       "isPromo": false,
       "badge": "🔥 Crujientes",
       "prepTime": "24h",
-      "availableDays": ["Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"],
+      "availableDays": [
+        "Martes",
+        "Miércoles",
+        "Jueves",
+        "Viernes",
+        "Sábado",
+        "Domingo"
+      ],
       "description": "Masa fina de maíz con relleno abundante de carne desmechada guisada, papa criolla y arroz. Incluye frasco de ají casero picante o suave.",
       "allergens": [],
       "ingredients": "Carne magra desmechada, papa criolla, cebolleta, comino criollo, masa de maíz nixtamalizado frito y ají de cilantro.",
@@ -70,9 +97,14 @@
       "isPromo": false,
       "badge": "🌿 Envuelto en Hoja",
       "prepTime": "48h",
-      "availableDays": ["Sábado", "Domingo"],
+      "availableDays": [
+        "Sábado",
+        "Domingo"
+      ],
       "description": "Masa de maíz especiada con costilla de cerdo, tocino, pollo, garbanzos y huevo duro, envuelto artesanalmente en hojas de plátano ahumadas.",
-      "allergens": ["Huevo"],
+      "allergens": [
+        "Huevo"
+      ],
       "ingredients": "Masa aliñada de maíz, pollo de granja, tocino adobado, garbanzos, zanahoria, pimentón y masa al vapor de 4 horas.",
       "imageUrl": "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=600&auto=format&fit=crop&q=80"
     },
@@ -85,9 +117,15 @@
       "isPromo": true,
       "badge": "⭐ Más Vendido",
       "prepTime": "24h",
-      "availableDays": ["Viernes", "Sábado", "Domingo"],
+      "availableDays": [
+        "Viernes",
+        "Sábado",
+        "Domingo"
+      ],
       "description": "Incluye: 2 Cazuelas de Mute Santandereano, 2 Raciones de Carne Oreada con yuca, 6 Arepas de maíz pelao, 6 Empanadas y frasco de ají casero.",
-      "allergens": ["Apio"],
+      "allergens": [
+        "Apio"
+      ],
       "ingredients": "Selección completa de nuestras mejores recetas familiares listas para calentar y servir en mesa.",
       "imageUrl": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=600&auto=format&fit=crop&q=80"
     }
