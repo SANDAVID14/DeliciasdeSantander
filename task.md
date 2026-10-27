@@ -72,3 +72,15 @@ Finalizar y consolidar la plataforma de venta online y panel administrativo para
   - Comprobación de flujo completo: edición de producto en panel admin ➔ persistencia en `data/store.json` ➔ reflejo instantáneo en vista tienda (index) ➔ persistencia confirmada tras recargar la página.
 - [x] **6.4. Git y GitHub**:
   - Actualización de repositorio local y remoto en GitHub con todos los cambios y artefactos.
+
+---
+
+## Fase 7: Simulación Móvil y Sincronización Automática con Repositorio GitHub
+- [x] **7.1. Sincronización Automática Servidor ➔ GitHub**:
+  - Integrado en `server.py` la ejecución automática de `git add data/store.json`, `git commit` y `git push origin master` cada vez que el administrador guarda cambios desde cualquier celular o navegador en la red.
+- [x] **7.2. Integración Directa con GitHub REST API**:
+  - Implementado en `index.html` el cliente directo de la API de GitHub (`PUT /repos/SANDAVID14/DeliciasdeSantander/contents/data/store.json`) con modal de configuración para Personal Access Token (PAT).
+  - Permite actualizar el repositorio de GitHub desde cualquier dispositivo móvil en cualquier parte del mundo (incluso navegando en GitHub Pages).
+- [x] **7.3. Simulación Exitosa de Administrador Móvil**:
+  - Simulado acceso desde un smartphone (iPhone/Android con User-Agent móvil).
+  - Edición del plato *Mute Santandereano Auténtico*, activación de promoción y confirmación de recepción en GitHub (Commit confirmado y publicado).

@@ -317,6 +317,16 @@
       const [isProductionSheetOpen, setIsProductionSheetOpen] = useState(false);
       const [productionSheetDate, setProductionSheetDate] = useState(new Date().toISOString().split("T")[0]);
 
+      // Estado de Sincronización con GitHub desde Móvil / Cualquier Navegador
+      const [githubToken, setGithubToken] = useState(() => {
+        return localStorage.getItem("dls_github_token") || "";
+      });
+      const [githubRepo, setGithubRepo] = useState(() => {
+        return localStorage.getItem("dls_github_repo") || "SANDAVID14/DeliciasdeSantander";
+      });
+      const [isGitHubModalOpen, setIsGitHubModalOpen] = useState(false);
+      const [isSyncingGitHub, setIsSyncingGitHub] = useState(false);
+
       // Cargar datos CENTRALIZADOS desde el hosting / API al iniciar la web
       useEffect(() => {
         async function fetchGlobalStoreData() {
@@ -423,10 +433,81 @@
         return () => clearInterval(timer);
       }, [banners.length]);
 
-      // FUNCIÓN MAESTRA: Sube y actualiza los cambios en el HOSTING en tiempo real
+      // SINCRONIZACIÓN DIRECTA CON GITHUB VÍA REST API (Funciona desde cualquier celular / navegador en el mundo)
+      const syncDirectToGitHub = async (prods, bans, ords, customToken = null) => {
+        const token = customToken || githubToken || localStorage.getItem("dls_github_token");
+        const repo = githubRepo || localStorage.getItem("dls_github_repo") || "SANDAVID14/DeliciasdeSantander";
+        if (!token) return { success: false, reason: "no_token" };
+
+        setIsSyncingGitHub(true);
+        try {
+          const path = "data/store.json";
+          const apiUrl = `https://api.github.com/repos/${repo}/contents/${path}`;
+
+          // 1. Obtener SHA actual del archivo en GitHub
+          let sha = null;
+          try {
+            const getRes = await fetch(apiUrl + "?t=" + Date.now(), {
+              headers: {
+                "Authorization": `Bearer ${token}`,
+                "Accept": "application/vnd.github+json"
+              }
+            });
+            if (getRes.ok) {
+              const getJson = await getRes.json();
+              sha = getJson.sha;
+            }
+          } catch (e) {
+            console.warn("No se pudo obtener SHA previo de GitHub:", e);
+          }
+
+          const payload = {
+            updatedAt: new Date().toISOString(),
+            products: prods !== undefined ? prods : products,
+            banners: bans !== undefined ? bans : banners,
+            orders: ords !== undefined ? ords : orders
+          };
+
+          const jsonStr = JSON.stringify(payload, null, 2);
+          const base64Content = btoa(unescape(encodeURIComponent(jsonStr)));
+
+          const nowHuman = new Date().toLocaleString("es-ES", { dateStyle: "short", timeStyle: "medium" });
+          const putBody = {
+            message: `feat(admin): actualizacion desde panel movil/web (${nowHuman})`,
+            content: base64Content,
+            branch: "master"
+          };
+          if (sha) putBody.sha = sha;
+
+          const putRes = await fetch(apiUrl, {
+            method: "PUT",
+            headers: {
+              "Authorization": `Bearer ${token}`,
+              "Accept": "application/vnd.github+json",
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify(putBody)
+          });
+
+          if (putRes.ok) {
+            const putData = await putRes.json();
+            setIsSyncingGitHub(false);
+            return { success: true, commit: putData.commit };
+          } else {
+            const errData = await putRes.json().catch(() => ({}));
+            setIsSyncingGitHub(false);
+            return { success: false, error: errData.message || "Error al subir a GitHub" };
+          }
+        } catch (err) {
+          setIsSyncingGitHub(false);
+          return { success: false, error: err.message };
+        }
+      };
+
+      // FUNCIÓN MAESTRA: Sube y actualiza los cambios en el HOSTING y en GITHUB en tiempo real
       const saveToHosting = async (updatedProducts, updatedBanners, updatedOrders) => {
         setSyncStatus("syncing");
-        setSyncMessage("⏳ Publicando cambios en el servidor...");
+        setSyncMessage("⏳ Publicando cambios en servidor y GitHub...");
 
         const prods = updatedProducts !== undefined ? updatedProducts : products;
         const bans = updatedBanners !== undefined ? updatedBanners : banners;
@@ -450,6 +531,7 @@
         // Probar endpoints de sincronización disponibles
         const endpoints = [API_ENDPOINT, "./api/sync", "./api/sync.php", "/api/sync", "/api/sync.php"];
         let success = false;
+        let ghSyncedFromBackend = false;
 
         for (const ep of endpoints) {
           try {
@@ -459,7 +541,11 @@
               body: JSON.stringify(payload)
             });
             if (res.ok) {
+              const resData = await res.json().catch(() => ({}));
               success = true;
+              if (resData.githubSynced) {
+                ghSyncedFromBackend = true;
+              }
               break;
             }
           } catch (e) {
@@ -467,12 +553,26 @@
           }
         }
 
-        if (success) {
+        // Si hay token de GitHub configurado en el navegador móvil y el backend no lo empujó
+        let directGhSuccess = false;
+        const currentGhToken = localStorage.getItem("dls_github_token");
+        if (currentGhToken && !ghSyncedFromBackend) {
+          const ghRes = await syncDirectToGitHub(prods, bans, ords, currentGhToken);
+          if (ghRes.success) {
+            directGhSuccess = true;
+            success = true;
+          }
+        }
+
+        if (ghSyncedFromBackend || directGhSuccess) {
           setSyncStatus("connected");
-          setSyncMessage("✅ ¡Cambios guardados y publicados para TODOS los visitantes!");
+          setSyncMessage("🚀 ¡Publicado en GitHub y actualizado para todos los clientes!");
+        } else if (success) {
+          setSyncStatus("connected");
+          setSyncMessage("✅ ¡Cambios guardados en servidor y publicados!");
         } else {
           setSyncStatus("offline");
-          setSyncMessage("💾 Cambios guardados localmente (Se sincronizarán con el hosting)");
+          setSyncMessage("💾 Cambios guardados localmente en este dispositivo");
         }
       };
 
@@ -1228,20 +1328,62 @@
                         </span>
                       </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2 items-center">
+                      <button 
+                        onClick={async () => {
+                          setIsSyncingGitHub(true);
+                          setSyncMessage("⏳ Sincronizando con repositorio de GitHub...");
+                          // 1. Probar vía backend local /api/git-push
+                          try {
+                            const res = await fetch("./api/git-push", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ token: "Santander2026*" })
+                            });
+                            if (res.ok) {
+                              setIsSyncingGitHub(false);
+                              setSyncStatus("connected");
+                              setSyncMessage("🚀 Repositorio GitHub actualizado exitosamente");
+                              alert("¡Repositorio de GitHub sincronizado y actualizado con éxito!");
+                              return;
+                            }
+                          } catch (e) {}
+
+                          // 2. Si no hay backend local, probar vía GitHub REST API directa
+                          const ghRes = await syncDirectToGitHub(products, banners, orders);
+                          setIsSyncingGitHub(false);
+                          if (ghRes.success) {
+                            setSyncStatus("connected");
+                            setSyncMessage("🚀 ¡GitHub actualizado vía API!");
+                            alert("¡Cambios publicados en GitHub correctamente!");
+                          } else if (ghRes.reason === "no_token") {
+                            setIsGitHubModalOpen(true);
+                          } else {
+                            alert("Error al conectar con GitHub: " + (ghRes.error || "Verifique su token"));
+                          }
+                        }}
+                        disabled={isSyncingGitHub}
+                        className="px-3 py-2 bg-stone-900 text-white hover:bg-black rounded-lg text-xs font-bold border border-stone-700 flex items-center gap-1.5 shadow-sm active:scale-95 transition-all">
+                        <span>{isSyncingGitHub ? "⏳ Sincronizando..." : "🐙 Sincronizar GitHub"}</span>
+                      </button>
+                      <button 
+                        onClick={() => setIsGitHubModalOpen(true)}
+                        className="px-3 py-2 bg-stone-100 text-stone-700 hover:bg-stone-200 rounded-lg text-xs font-bold border flex items-center gap-1">
+                        <span>⚙️ Token GitHub</span>
+                      </button>
                       <button 
                         onClick={downloadStoreJSON}
                         className="px-3 py-2 bg-stone-100 text-stone-700 hover:bg-stone-200 rounded-lg text-xs font-bold border">
-                        💾 Descargar store.json
+                        💾 store.json
                       </button>
                       <button 
                         onClick={() => setView("store")}
-                        className="px-4 py-2 bg-stone-800 text-white hover:bg-black rounded-lg text-xs font-bold">
+                        className="px-4 py-2 bg-brand-red text-white hover:bg-brand-darkRed rounded-lg text-xs font-bold shadow">
                         👀 Ver Tienda
                       </button>
                       <button 
                         onClick={handleAdminLogout}
-                        className="px-4 py-2 bg-red-50 text-brand-red hover:bg-red-100 rounded-lg text-xs font-bold">
+                        className="px-3 py-2 bg-red-50 text-brand-red hover:bg-red-100 rounded-lg text-xs font-bold">
                         Cerrar Sesión
                       </button>
                     </div>
@@ -2480,6 +2622,70 @@
                       <span>📲 Cotizar Catering por WhatsApp</span>
                     </a>
                   </div>
+                </div>
+              </div>
+            </div>
+          {/* MODAL CONFIGURACIÓN DE GITHUB API */}
+          {isGitHubModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+              <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
+                <div className="flex justify-between items-center mb-4 pb-2 border-b">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">🐙</span>
+                    <h3 className="font-bold text-base text-stone-900">Sincronización con GitHub Móvil</h3>
+                  </div>
+                  <button onClick={() => setIsGitHubModalOpen(false)} className="text-stone-400 hover:text-black font-bold">✕</button>
+                </div>
+
+                <p className="text-xs text-stone-600 mb-4 leading-relaxed">
+                  Permite que las modificaciones hechas desde cualquier celular o navegador se guarden directamente en tu repositorio de GitHub (<b>{githubRepo}</b>) mediante la API oficial de GitHub.
+                </p>
+
+                <div className="space-y-3 text-xs mb-5">
+                  <div>
+                    <label className="block font-bold text-stone-700 mb-1">Repositorio de GitHub</label>
+                    <input 
+                      type="text" 
+                      value={githubRepo} 
+                      onChange={e => {
+                        setGithubRepo(e.target.value);
+                        localStorage.setItem("dls_github_repo", e.target.value);
+                      }} 
+                      className="w-full px-3 py-2 border rounded-lg font-mono text-xs" 
+                      placeholder="usuario/repositorio"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-stone-700 mb-1">Personal Access Token de GitHub (PAT)</label>
+                    <input 
+                      type="password" 
+                      value={githubToken} 
+                      onChange={e => setGithubToken(e.target.value)} 
+                      className="w-full px-3 py-2 border rounded-lg font-mono text-xs" 
+                      placeholder="github_pat_... o ghp_..."
+                    />
+                    <span className="text-[10px] text-stone-400 mt-1 block">
+                      Se almacena de forma segura en este dispositivo (localStorage). Solo requiere permiso de lectura/escritura de contenidos (`Contents: read & write`).
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  <button 
+                    onClick={() => setIsGitHubModalOpen(false)} 
+                    className="px-4 py-2 border rounded-lg font-bold text-xs text-stone-600">
+                    Cerrar
+                  </button>
+                  <button 
+                    onClick={() => {
+                      localStorage.setItem("dls_github_token", githubToken);
+                      localStorage.setItem("dls_github_repo", githubRepo);
+                      setIsGitHubModalOpen(false);
+                      alert("Configuración de GitHub guardada en este dispositivo.");
+                    }} 
+                    className="px-4 py-2 bg-brand-red text-white rounded-lg font-bold text-xs hover:bg-brand-darkRed shadow-md">
+                    Guardar Configuración
+                  </button>
                 </div>
               </div>
             </div>
