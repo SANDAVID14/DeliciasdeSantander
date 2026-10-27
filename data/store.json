@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-27T19:16:32.967408+00:00",
+  "updatedAt": "2026-10-27T19:53:21.082904+00:00",
   "products": [
     {
       "id": "p1",
@@ -30,9 +30,9 @@
       "name": "Mute Santandereano Auténtico (Cazuela 750ml)",
       "category": "platos",
       "price": 13.5,
-      "promoPrice": null,
-      "isPromo": false,
-      "badge": "🔥 Plato Insignia",
+      "promoPrice": 12.0,
+      "isPromo": true,
+      "badge": "🔥 Promo Fin de Semana Móvil",
       "prepTime": "48h",
       "availableDays": [
         "Viernes",
